@@ -2,46 +2,55 @@
 -- MeowCode Editor
 -- By Thoq
 -- License: MIT
--- Do not redistribute without MIT License 
+-- Do not redistribute without MIT License ( as per license )
 ]]--
 
+--------- Import Utilities ---------
+local utils = require("utils")
+
 --------- Initialize Variables ---------
-local text = ""
-local cursorPosition = 1
-local selectionStart = nil
-local selectionEnd = nil
-local clipboard = ""
-local isDarkMode = false
+name = utils.name -- Set Name --
+version = utils.version -- Set Version --
+license = utils.license -- Set License --
+local text = "" -- Initialize Text Contents --
+local cursorPosition = 1 -- Initialize Cursor Pos --
+local selectionStart = nil -- Initialize Selection Start --
+local selectionEnd = nil -- Initialize Selection End --
+local clipboard = "" -- Initialize Clipboard --
+local isDarkMode = utils.loadSettings() -- Load Settings --
 local keyStates = {} -- Track Key States --
 local keyRepeatDelay = 0.1 -- Delay For Key Repeat ( Seconds )
-local keyRepeatTimer = 0 -- Key Repeat Timer --
+local keyRepeatTimer = 0 -- Key Repeat Timer 
 
---------- Initialize love ---------
+----------- Initialize love ---------
 function love.load()
-	loadSettings()
+    utils.printInfo()
+    utils.log("Begin window setup [0/4]")
+
+    utils.log("Check settings... [1/4]")
+    if isDarkMode == true then
+    	utils.log("Using dark mode...")
+    elseif isDarkMode == false then
+    	utils.log("Using light mode...")
+    else
+    	utils.log("Failed to load settings!")
+    end
+
+    utils.log("Settings up window [2/4]")
     love.window.setTitle("MeowCode")
-    love.window.setMode(1000, 700)
+
+    utils.log("Setting up window [3/4]")
+    love.window.setMode(1000, 700, { resizable = true })
+
+    utils.log("Setting up window [4/4]")
     love.graphics.setFont(love.graphics.newFont(14))
+
+    utils.log("Set up successfully!")
+
+    print("\n----------- Logs -----------")
 end
 
---------- Save Settings ---------
-function saveSettings()
-	local file = love.filesystem.newFile("settings.txt", "w")
-	file:write(isDarkMode and "dark" or "light")
-	file:close()
-end
-
---------- Load Settings ---------
-function loadSettings()
-	if love.filesystem.getInfo("settings.txt") then
-		local file = love.filesystem.newFile("settings.txt", "r")
-		local mode = file:read()
-		isDarkMode = (mode == "dark")
-		file:close()
-	end	
-end
-
---------- Handle Input ---------
+--------- Handle Input ( Text ) ---------
 function love.textinput(t)
     if selectionStart and selectionEnd then
         -- If Selection Then Replace With New Text --
@@ -59,9 +68,12 @@ end
 function love.keypressed(key, scancode, isrepeat)
     keyStates[key] = true -- Mark Key As Pressed --
 
+    -- Check If Shit Pressed --
+    local shiftHeld = love.keyboard.isDown("lshift") or love.keyboard.isDown("rshift")
+
     if key == "backspace" then
         if selectionStart and selectionEnd then
-            -- Delete the selected text --
+            -- Delete Selected Char(s) --
             text = text:sub(1, selectionStart - 1) .. text:sub(selectionEnd)
             cursorPosition = selectionStart
             selectionStart = nil
@@ -81,11 +93,25 @@ function love.keypressed(key, scancode, isrepeat)
         if cursorPosition > 1 then
             cursorPosition = cursorPosition - 1
         end
+        if not shiftHeld then
+            -- Clear selection If Shift Isn't Down --
+            selectionStart = nil
+            selectionEnd = nil
+        end
     elseif key == "right" then
         -- Move Cursor Right --
         if cursorPosition <= #text then
             cursorPosition = cursorPosition + 1
         end
+        if not shiftHeld then
+            -- Clear selection If Shift Isn't Down --
+            selectionStart = nil
+            selectionEnd = nil
+        end
+    elseif key == "return" then
+        -- Insert New Line at Cursor Pos --
+        text = text:sub(1, cursorPosition - 1) .. "\n" .. text:sub(cursorPosition)
+        cursorPosition = cursorPosition + 1 -- Move Cursor To New Line --
     elseif key == "lctrl" or key == "rctrl" then
         -- Do Nothing --
     elseif key == "a" and (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl")) then
@@ -115,11 +141,13 @@ function love.keypressed(key, scancode, isrepeat)
     elseif key == "d" and (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl")) then
         -- Toggle Dark/Light Mode --
         isDarkMode = not isDarkMode
-        saveSettings()
+        utils.saveSettings(isDarkMode)
     else
-        -- Clear Selection If *Any* Key Is Pressed --
-        selectionStart = nil
-        selectionEnd = nil
+        -- Clear Selection If *Any* Key Is Pressed And Shift Isn't Down --
+        if not shiftHeld then
+            selectionStart = nil
+            selectionEnd = nil
+        end
     end
 end
 
@@ -132,21 +160,24 @@ function love.update(dt)
     -- Key Repeating --
     keyRepeatTimer = keyRepeatTimer - dt -- Decrease Timer By Delta --
 
-	-- Repeat Backspace Key --
+    -- Repeat Backspace Key --
     if keyStates["backspace"] and keyRepeatTimer <= 0 then
         love.keypressed("backspace")
         keyRepeatTimer = keyRepeatDelay -- Reset Timer --
     end
+
     -- Repeat Delete Key --
     if keyStates["delete"] and keyRepeatTimer <= 0 then
         love.keypressed("delete")
         keyRepeatTimer = keyRepeatDelay -- Reset Timer --
     end
+
     -- Repeat Left Key ( Arrow ) --
     if keyStates["left"] and keyRepeatTimer <= 0 then
         love.keypressed("left")
         keyRepeatTimer = keyRepeatDelay -- Reset Timer --
     end
+
     -- Repeat Right Key ( Arrow ) --
     if keyStates["right"] and keyRepeatTimer <= 0 then
         love.keypressed("right")
@@ -167,14 +198,14 @@ function love.draw()
         love.graphics.setColor(0, 0, 0) -- Black Chars ( Editor ) --
     end
 
-    love.graphics.print(text, 10, 40) -- Draw Chars ( Editor )
+    love.graphics.print(text, 10, 40) -- Draw Chars ( Editor ) --
 
-    -- Draw Selection --f
+    -- Draw Selection --
     if selectionStart and selectionEnd then
         local selectionText = text:sub(selectionStart, selectionEnd - 1)
         local selectionWidth = love.graphics.getFont():getWidth(selectionText)
         local selectionX = love.graphics.getFont():getWidth(text:sub(1, selectionStart - 1)) + 10
-		love.graphics.setColor(0.7, 0.7, 1, 0.5) -- Light Blue Selection --
+        love.graphics.setColor(0.7, 0.7, 1, 0.5) -- Light Blue Selection --
         love.graphics.rectangle("fill", selectionX, 40, selectionWidth, love.graphics.getFont():getHeight())
         love.graphics.setColor(isDarkMode and 1 or 0, isDarkMode and 1 or 0, isDarkMode and 1 or 0) -- Reset Char Color --
     end
@@ -184,4 +215,11 @@ function love.draw()
         local cursorX = love.graphics.getFont():getWidth(text:sub(1, cursorPosition - 1)) + 10
         love.graphics.line(cursorX, 40, cursorX, 40 + love.graphics.getFont():getHeight())
     end
+end
+
+--------- Handle Exit ---------
+function love.quit()
+    utils.log("Cleaning up [0/1]")
+    utils.log("Cleaned up successfully! [1/1]")
+    utils.log("Goodbye!")
 end
